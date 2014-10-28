@@ -1,0 +1,17 @@
+torskbot är ett hack i form av en IRC-robot som skriver ut HTML-titeln
+på de HTTP-länkar som skrivs i en kanal. torskbot talar svenska i kanalen.
+
+Exempel på installation och användning:
+
+	make install
+	torskbot server \#kanal
+
+Exempel på användning med annorlunda port:
+
+	torskbot -p port server \#kanal
+
+Exempel på paketering:
+
+	make PREFIX=/usr DESTDIR=/tmp/stage install
+
+torskbot kräver åtminstone Python 3 och har endast testats med Python 3.2.
