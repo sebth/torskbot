@@ -120,8 +120,8 @@ class IRCConnection:
         return m[0].split() + ([m[1]] if len(m) > 1 else [])
 
 
-def urlsld(url):
-    return urllib.parse.urlsplit(url)[1].rsplit('.')[-2]
+def urldls(url):
+    return urllib.parse.urlsplit(url)[1].split('.')
 
 
 class FinalURLHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -130,7 +130,9 @@ class FinalURLHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
         self.final_url = None
         super().__init__(*args, **kwargs)
     def redirect_request(self, req, fp, code, msg, hdrs, newurl):
-        if urlsld(req.full_url) != urlsld(newurl):
+        olddl = urldls(req.full_url)
+        newdl = urldls(newurl)
+        if olddl[-2] != newdl[-2] and olddl[-2]+olddl[-1] != newdl[-2]:
             self._netloc_changed = True
         if self._netloc_changed:
             self.final_url = newurl
