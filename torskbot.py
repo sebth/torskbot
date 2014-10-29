@@ -180,30 +180,48 @@ class TitleHTMLParser(HTMLParser):
                                else int(name))
 
 
+class ChunkedParserFeeder:
+
+    def __init__(self, f):
+        self._f = f
+        self._content = b''
+
+    def feeduntil(self, parser, getdata, encoding):
+        parser.feed(self._content.decode(encoding, errors='replace'))
+        data = getdata()
+
+        while not data and len(self._content) <= 1024**2:
+            chunk = self._f.read(1024)
+            if not chunk:
+                return None
+            parser.feed(chunk.decode(encoding, errors='replace'))
+            data = getdata()
+            self._content += chunk
+
+        return data
+
+
 def sendtitle(c, m):
     for match in re.finditer('https?://\S+', m[2]):
         rh = FinalURLHTTPRedirectHandler()
         opener = urllib.request.build_opener(rh)
         opener.addheaders = [('User-Agent', 'torskbot')]
-        u = opener.open(match.group(), timeout=5)
+        f = opener.open(match.group(), timeout=5)
         if rh.final_url:
             c.send('PRIVMSG', m[1], 'Vidarebefordring till: ' + rh.final_url)
 
-        info = u.info()
+        info = f.info()
         t = info.get_content_type()
         if t == 'text/html' or t == 'application/xhtml+xml':
-            cs = info.get_content_charset()
-            content = u.read()
+            feeder = ChunkedParserFeeder(f)
 
+            cs = info.get_content_charset()
             if not cs:
                 ep = EncodingHTMLParser()
-                ep.feed(content.decode('latin-1', errors='replace'))
-                if ep.encoding:
-                    cs = ep.encoding
+                cs = feeder.feeduntil(ep, lambda: ep.encoding, 'latin-1')
 
             tp = TitleHTMLParser()
-            tp.feed(content.decode(cs if cs else 'latin-1', errors='replace'))
-            if tp.title:
+            if feeder.feeduntil(tp, lambda: tp.title, cs if cs else 'latin-1'):
                 c.send('PRIVMSG', m[1], 'Titel: ' + tp.title)
 
 
