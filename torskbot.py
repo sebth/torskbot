@@ -208,7 +208,10 @@ def sendtitle(c, m):
         rh = FinalURLHTTPRedirectHandler()
         opener = urllib.request.build_opener(rh)
         opener.addheaders = [('User-Agent', 'torskbot')]
-        f = opener.open(match.group(), timeout=5)
+        try:
+            f = opener.open(match.group(), timeout=5)
+        except urllib.error.HTTPError as e:
+            f = e.fp
         if rh.final_url:
             c.send('PRIVMSG', m[1], 'Vidarebefordring till: ' + rh.final_url)
 
