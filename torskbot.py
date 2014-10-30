@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+import codecs
 import getopt
 import re
 import select
@@ -142,12 +143,18 @@ class FinalURLHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
 class EncodingHTMLParser(HTMLParser):
 
         def __init__(self):
-            self.encoding = None
+            self.result = None
             super().__init__(False)
 
         def handle_starttag(self, tag, attrs):
-            if tag == 'meta' and 'charset' in dict(attrs):
-                self.encoding = dict(attrs)['charset']
+            if tag == 'meta':
+                if 'charset' in dict(attrs):
+                    self.result = dict(attrs)['charset']
+                elif 'http-equiv' in dict(attrs) and 'content' in dict(attrs):
+                    match = re.match('text/html;\s*charset=(.+)',
+                                     dict(attrs)['content'])
+                    if match:
+                        self.result = match.group(1)
 
 
 class TitleHTMLParser(HTMLParser):
@@ -155,17 +162,17 @@ class TitleHTMLParser(HTMLParser):
     def __init__(self):
         self._intitle = False
         self._title = ''
-        self.title = None
+        self.result = None
         super().__init__(False)
 
     def handle_starttag(self, tag, attrs):
-        if tag == 'title' and not self.title:
+        if tag == 'title' and not self.result:
             self._intitle = True
 
     def handle_endtag(self, tag):
         if tag == 'title':
             if self._title:
-                self.title = re.sub('\s+', ' ', self._title.strip())
+                self.result = re.sub('\s+', ' ', self._title.strip())
             self._intitle = False
 
     def handle_data(self, data):
@@ -188,19 +195,38 @@ class ChunkedParserFeeder:
         self._f = f
         self._content = b''
 
-    def feeduntil(self, parser, getdata, encoding):
+    def feeduntil(self, parser, encoding, maxbytes=1024**2):
         parser.feed(self._content.decode(encoding, errors='replace'))
-        data = getdata()
 
-        while not data and len(self._content) <= 1024**2:
+        while not parser.result and len(self._content) < maxbytes:
             chunk = self._f.read(1024)
             if not chunk:
-                return None
+                break
             parser.feed(chunk.decode(encoding, errors='replace'))
-            data = getdata()
             self._content += chunk
 
-        return data
+        return parser.result
+
+    def peek(self, n):
+        while len(self._content) < n:
+            chunk = self._f.read(1024)
+            if not chunk:
+                break
+            self._content += chunk
+        return self._content[:n]
+
+
+def bom2charset(bom):
+    if bom.startswith(codecs.BOM_UTF8):
+        return 'utf-8-sig'
+    if bom == codecs.BOM_UTF32_BE:
+        return 'utf-32-be'
+    if bom == codecs.BOM_UTF32_LE:
+        return 'utf-32-le'
+    if bom.startswith(codecs.BOM_UTF16_BE):
+        return 'utf-16-be'
+    if bom.startswith(codecs.BOM_UTF16_LE):
+        return 'utf-16-le'
 
 
 def sendtitle(c, m):
@@ -217,17 +243,31 @@ def sendtitle(c, m):
 
         info = f.info()
         t = info.get_content_type()
-        if t == 'text/html' or t == 'application/xhtml+xml':
+        xml = t in ('application/xhtml+xml', 'application/xml', 'text/xml')
+        if t == 'text/html' or xml:
             feeder = ChunkedParserFeeder(f)
 
-            cs = info.get_content_charset()
+            cs = bom2charset(feeder.peek(4))
             if not cs:
-                ep = EncodingHTMLParser()
-                cs = feeder.feeduntil(ep, lambda: ep.encoding, 'latin-1')
+                cs = info.get_content_charset()
+            if not cs:
+                if xml:
+                    match = re.match(b'\<\?xml\s+version=".*?"\s+'
+                                     b'encoding="(.+?)"', feeder.peek(1024))
+                    if match:
+                        cs = match.group(1).decode('ascii')
+                else:
+                    ep = EncodingHTMLParser()
+                    # The standard says that the encoding must be
+                    # declared within the first 1024 bytes but some
+                    # pages violate that.  Allow up to 2048 to give
+                    # some margin.
+                    cs = feeder.feeduntil(ep, 'latin-1', 2048)
 
             tp = TitleHTMLParser()
-            if feeder.feeduntil(tp, lambda: tp.title, cs if cs else 'latin-1'):
-                c.send('PRIVMSG', m[1], 'Titel: ' + tp.title)
+            if feeder.feeduntil(tp, cs if cs else
+                                ('utf-8' if xml else 'latin-1')):
+                c.send('PRIVMSG', m[1], 'Titel: ' + tp.result)
 
 
 def printerror(s):
