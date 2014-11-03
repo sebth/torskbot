@@ -16,6 +16,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import codecs
+import encodings.idna
 import getopt
 import re
 import select
@@ -23,9 +24,15 @@ import socket
 import sys
 import urllib.parse
 import urllib.request
+from fnmatch import fnmatch
 from html.parser import HTMLParser
 from html.entities import name2codepoint
 from time import sleep
+
+
+codecs.register_error(
+    'ircfallback',
+    lambda e: (e.object[e.start:e.end].decode('latin-1', 'replace'), e.end))
 
 
 class IRCReconnectError(Exception):
@@ -111,7 +118,7 @@ class IRCConnection:
     def recv(self):
         while '\r\n' not in self._buf:
             self._testconn()
-            self._buf += self._recv(512).decode(errors='replace')
+            self._buf += self._recv(512).decode(errors='ircfallback')
 
         l = ol = self._buf[:self._buf.index('\r\n')]
         if l[0] == ':':
@@ -125,6 +132,14 @@ def urldls(url):
     return urllib.parse.urlsplit(url)[1].split('.')
 
 
+def idneq(domain1, domain2):
+    domain1 = (encodings.idna.ToUnicode(domain1)
+               .encode('ascii', 'replace').decode('ascii'))
+    domain2 = (encodings.idna.ToUnicode(domain2)
+               .encode('ascii', 'replace').decode('ascii'))
+    return fnmatch(domain1, domain2) or fnmatch(domain2, domain1)
+
+
 class FinalURLHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
     def __init__(self, *args, **kwargs):
         self._netloc_changed = False
@@ -133,7 +148,8 @@ class FinalURLHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, hdrs, newurl):
         olddl = urldls(req.full_url)
         newdl = urldls(newurl)
-        if olddl[-2] != newdl[-2] and olddl[-2]+olddl[-1] != newdl[-2]:
+        if (not idneq(olddl[-2], newdl[-2]) and
+                olddl[-2]+olddl[-1] != newdl[-2]):
             self._netloc_changed = True
         if self._netloc_changed:
             self.final_url = newurl
@@ -196,13 +212,13 @@ class ChunkedParserFeeder:
         self._content = b''
 
     def feeduntil(self, parser, encoding, maxbytes=1024**2):
-        parser.feed(self._content.decode(encoding, errors='replace'))
+        parser.feed(self._content.decode(encoding, 'replace'))
 
         while not parser.result and len(self._content) < maxbytes:
             chunk = self._f.read(1024)
             if not chunk:
                 break
-            parser.feed(chunk.decode(encoding, errors='replace'))
+            parser.feed(chunk.decode(encoding, 'replace'))
             self._content += chunk
 
         return parser.result
@@ -214,6 +230,20 @@ class ChunkedParserFeeder:
                 break
             self._content += chunk
         return self._content[:n]
+
+
+def quote_nonascii_path(path):
+    return re.sub(
+        b'[\x80-\xff]',
+        lambda match: '%{:x}'.format(ord(match.group())).encode('ascii'),
+        path.encode()).decode('ascii')
+
+
+def urlquote(url):
+    parts = urllib.parse.urlsplit(url)
+    return urllib.parse.urlunsplit(
+        (parts[0], parts[1].encode('idna').decode('ascii'),
+         quote_nonascii_path(parts[2])) + parts[3:])
 
 
 def bom2charset(bom):
@@ -235,7 +265,7 @@ def sendtitle(c, m):
         opener = urllib.request.build_opener(rh)
         opener.addheaders = [('User-Agent', 'torskbot')]
         try:
-            f = opener.open(match.group(), timeout=5)
+            f = opener.open(urlquote(match.group()), timeout=5)
         except urllib.error.HTTPError as e:
             f = e.fp
         if rh.final_url:
