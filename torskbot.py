@@ -25,6 +25,7 @@ import sys
 import urllib.parse
 import urllib.request
 from fnmatch import fnmatch
+from gzip import GzipFile
 from html.parser import HTMLParser
 from html.entities import name2codepoint
 from time import sleep
@@ -263,7 +264,8 @@ def sendtitle(c, m):
     for match in re.finditer('https?://\S+', m[2]):
         rh = FinalURLHTTPRedirectHandler()
         opener = urllib.request.build_opener(rh)
-        opener.addheaders = [('User-Agent', 'torskbot')]
+        opener.addheaders = [('User-Agent', 'torskbot'),
+                             ('Accept-Encoding', 'gzip')]
         try:
             f = opener.open(urlquote(match.group()), timeout=5)
         except urllib.error.HTTPError as e:
@@ -275,7 +277,9 @@ def sendtitle(c, m):
         t = info.get_content_type()
         xml = t in ('application/xhtml+xml', 'application/xml', 'text/xml')
         if t == 'text/html' or xml:
-            feeder = ChunkedParserFeeder(f)
+            feeder = ChunkedParserFeeder(GzipFile(fileobj=f)
+                                         if info['Content-Encoding'] == 'gzip'
+                                         else f)
 
             cs = bom2charset(feeder.peek(4))
             if not cs:
