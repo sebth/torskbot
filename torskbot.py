@@ -105,7 +105,7 @@ class IRCConnection:
     def send(self, *m):
         if ' ' in m[-1] or ':' in m[-1]:
             m = m[:-1] + (':' + m[-1],)
-        b = (' '.join(m) + '\r\n').encode()
+        b = ' '.join(m).encode()[:510] + b'\r\n'
         while b:
             b = b[self._send(b):]
 
