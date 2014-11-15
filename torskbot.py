@@ -141,19 +141,20 @@ def idneq(domain1, domain2):
     return fnmatch(domain1, domain2) or fnmatch(domain2, domain1)
 
 
+def urlchange(oldurl, newurl):
+    olddl = urldls(oldurl)
+    newdl = urldls(newurl)
+    return not idneq(olddl[-2], newdl[-2]) and olddl[-2]+olddl[-1] != newdl[-2]
+
+
 class FinalURLHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
+
     def __init__(self, *args, **kwargs):
-        self._netloc_changed = False
         self.final_url = None
         super().__init__(*args, **kwargs)
+
     def redirect_request(self, req, fp, code, msg, hdrs, newurl):
-        olddl = urldls(req.full_url)
-        newdl = urldls(newurl)
-        if (not idneq(olddl[-2], newdl[-2]) and
-                olddl[-2]+olddl[-1] != newdl[-2]):
-            self._netloc_changed = True
-        if self._netloc_changed:
-            self.final_url = newurl
+        self.final_url = newurl
         return super().redirect_request(req, fp, code, msg, hdrs, newurl)
 
 
@@ -165,11 +166,13 @@ class EncodingHTMLParser(HTMLParser):
 
         def handle_starttag(self, tag, attrs):
             if tag == 'meta':
-                if 'charset' in dict(attrs):
-                    self.result = dict(attrs)['charset']
-                elif 'http-equiv' in dict(attrs) and 'content' in dict(attrs):
+                attrs = dict(attrs)
+                if 'charset' in attrs:
+                    self.result = attrs['charset']
+                elif (attrs.get('http-equiv', '').lower() == 'content-type' and
+                        'content' in attrs):
                     match = re.match('text/html;\s*charset=(.+)',
-                                     dict(attrs)['content'])
+                                     attrs['content'])
                     if match:
                         self.result = match.group(1)
 
@@ -204,6 +207,23 @@ class TitleHTMLParser(HTMLParser):
         if self._intitle:
             self._title += chr(int(name[1:], 16) if name.startswith('x')
                                else int(name))
+
+
+class RedirectHTMLParser(HTMLParser):
+
+        def __init__(self):
+            self.result = None
+            super().__init__(False)
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if (tag == 'meta' and
+                    attrs.get('http-equiv', '').lower() == 'refresh' and
+                    'content' in attrs):
+                match = re.match('\d+;\s*url=(.+)', attrs['content'],
+                                 re.IGNORECASE)
+                if match:
+                    self.result = match.group(1)
 
 
 class ChunkedParserFeeder:
@@ -260,48 +280,67 @@ def bom2charset(bom):
         return 'utf-16-le'
 
 
-def sendtitle(c, m):
-    for match in re.finditer('https?://\S+', m[2]):
-        rh = FinalURLHTTPRedirectHandler()
-        opener = urllib.request.build_opener(rh)
-        opener.addheaders = [('User-Agent', 'torskbot'),
-                             ('Accept-Encoding', 'gzip')]
-        try:
-            f = opener.open(urlquote(match.group()), timeout=5)
-        except urllib.error.HTTPError as e:
-            f = e.fp
-        if rh.final_url:
-            c.send('PRIVMSG', m[1], 'Vidarebefordring till: ' + rh.final_url)
+def gettitlemsgs(url, from_=None, redirects=0):
+    rh = FinalURLHTTPRedirectHandler()
+    opener = urllib.request.build_opener(rh)
+    opener.addheaders = [('User-Agent', 'torskbot'),
+                         ('Accept-Encoding', 'gzip')]
+    try:
+        f = opener.open(urlquote(url), timeout=5)
+    except urllib.error.HTTPError as e:
+        f = e.fp
+    if rh.final_url:
+        if not from_:
+            from_ = url
+        url = rh.final_url
 
-        info = f.info()
-        t = info.get_content_type()
-        xml = t in ('application/xhtml+xml', 'application/xml', 'text/xml')
-        if t == 'text/html' or xml:
-            feeder = ChunkedParserFeeder(GzipFile(fileobj=f)
-                                         if info['Content-Encoding'] == 'gzip'
-                                         else f)
+    title = None
+    info = f.info()
+    t = info.get_content_type()
+    xml = t in ('application/xhtml+xml', 'application/xml', 'text/xml')
+    if t == 'text/html' or xml:
+        feeder = ChunkedParserFeeder(GzipFile(fileobj=f)
+                                     if info['Content-Encoding'] == 'gzip'
+                                     else f)
 
-            cs = bom2charset(feeder.peek(4))
-            if not cs:
-                cs = info.get_content_charset()
+        cs = bom2charset(feeder.peek(4))
+        if not cs:
+            cs = info.get_content_charset()
             if not cs:
                 if xml:
                     match = re.match(b'\<\?xml\s+version=".*?"\s+'
                                      b'encoding="(.+?)"', feeder.peek(1024))
-                    if match:
-                        cs = match.group(1).decode('ascii')
+                    cs = match.group(1).decode('ascii') if match else 'utf-8'
                 else:
-                    ep = EncodingHTMLParser()
                     # The standard says that the encoding must be
                     # declared within the first 1024 bytes but some
                     # pages violate that.  Allow up to 2048 to give
                     # some margin.
-                    cs = feeder.feeduntil(ep, 'latin-1', 2048)
+                    cs = feeder.feeduntil(EncodingHTMLParser(), 'latin-1',
+                                          2048)
+                    if not cs:
+                        cs = 'latin-1'
 
-            tp = TitleHTMLParser()
-            if feeder.feeduntil(tp, cs if cs else
-                                ('utf-8' if xml else 'latin-1')):
-                c.send('PRIVMSG', m[1], 'Titel: ' + tp.result)
+        title = feeder.feeduntil(TitleHTMLParser(), cs)
+        if not title and redirects < 20:
+            newurl = feeder.feeduntil(RedirectHTMLParser(), cs)
+            if newurl:
+                # TODO: Use `yield from' when upgrading from Python 3.2.
+                for titlemsg in gettitlemsgs(newurl, from_ if from_ else url,
+                                             redirects + 1):
+                    yield titlemsg
+                return
+
+    if from_ and urlchange(urlquote(from_), urlquote(url)):
+        yield 'Vidarebefordring till: ' + url
+    if title:
+        yield 'Titel: ' + title
+
+
+def sendtitle(c, m):
+    for match in re.finditer('https?://\S+', m[2]):
+        for titlemsg in gettitlemsgs(match.group()):
+            c.send('PRIVMSG', m[1], titlemsg)
 
 
 def printerror(s):
