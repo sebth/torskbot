@@ -192,7 +192,9 @@ class TitleHTMLParser(HTMLParser):
     def handle_endtag(self, tag):
         if tag == 'title':
             if self._title:
-                self.result = re.sub('\s+', ' ', self._title.strip())
+                space = '\x20\x09\x0a\x0c\x0d'
+                self.result = re.sub('[{}]+'.format(space), ' ',
+                                     self._title).strip(space)
             self._intitle = False
 
     def handle_data(self, data):
