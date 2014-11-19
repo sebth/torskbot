@@ -340,7 +340,7 @@ def gettitlemsgs(url, from_=None, redirects=0):
 
 
 def sendtitle(c, m):
-    for match in re.finditer('https?://[^\s()[\]{}<>«»`\'"‘’“”]+', m[2]):
+    for match in re.finditer('https?://[^\s[\]{}<>«»`"‘’“”]+', m[2]):
         for titlemsg in gettitlemsgs(match.group()):
             c.send('PRIVMSG', m[1], titlemsg)
 
