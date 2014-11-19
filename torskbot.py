@@ -19,7 +19,6 @@ import codecs
 import encodings.idna
 import getopt
 import re
-import select
 import socket
 import sys
 import urllib.parse
@@ -28,6 +27,7 @@ from fnmatch import fnmatch
 from gzip import GzipFile
 from html.parser import HTMLParser
 from html.entities import name2codepoint
+from select import select
 from time import sleep
 
 
@@ -58,8 +58,6 @@ class IRCConnection:
                 printerror('waiting one minute before attempting to reconnect')
                 sleep(60)
         self._s.settimeout(None)
-        self._p = select.poll()
-        self._p.register(self._s, select.POLLIN)
         self._buf = ''
         self.send('NICK', self.nick)
         self.send('USER', self.nick, 'localhost', 'localhost', self.realname)
@@ -110,9 +108,9 @@ class IRCConnection:
             b = b[self._send(b):]
 
     def _testconn(self):
-        if not self._p.poll(60e3):
+        if not select([self._s], [], [], 60)[0]:
             self.send('PING', 'server')
-            if not self._p.poll(60e3):
+            if not select([self._s], [], [], 60)[0]:
                 self.send('QUIT', 'Tidsfristen för ping löpte ut')
                 self._reconnect()
 
