@@ -348,13 +348,13 @@ def printerror(s):
 
 
 def printusage():
-    print('usage: {} [-p port] hostname channel'.format(sys.argv[0]),
+    print('usage: {} [-n nick] [-p port] hostname channel'.format(sys.argv[0]),
           file=sys.stderr)
 
 
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'p:')
+        opts, args = getopt.getopt(sys.argv[1:], 'n:p:')
     except getopt.GetoptError as e:
         printerror(e)
         printusage()
@@ -364,8 +364,9 @@ def main():
         printusage()
         return 2
 
-    with IRCConnection((args[0], dict(opts).get('-p', 6667)), 'torskbot',
-                       'Torsk') as c:
+    with IRCConnection((args[0], dict(opts).get('-p', 6667)),
+                       dict(opts).get('-n', 'torskbot'),
+                       'https://github.com/sebth/torskbot') as c:
         while True:
             try:
                 for m in c:

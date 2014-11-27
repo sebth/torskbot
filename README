@@ -6,9 +6,9 @@ Exempel på installation och användning:
 	make install
 	torskbot server \#kanal
 
-Exempel på användning med annorlunda port:
+Exempel på användning med annorlunda smeknamn och port:
 
-	torskbot -p port server \#kanal
+	torskbot -n namn -p port server \#kanal
 
 Exempel på paketering:
 
