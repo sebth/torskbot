@@ -88,14 +88,19 @@ class IRCConnection:
         self.__enter__()
         raise IRCReconnectError()
 
-    def _send(self, b):
-        sent = self._s.send(b)
-        if not sent:
+    def _sendall(self, b):
+        try:
+            self._s.sendall(b)
+        except socket.error as e:
+            printerror('send: ' + (e.strerror if e.strerror else str(e)))
             self._reconnect()
-        return sent
 
     def _recv(self, size):
-        buf = self._s.recv(size)
+        try:
+            buf = self._s.recv(size)
+        except socket.error as e:
+            printerror('recv: ' + (e.strerror if e.strerror else str(e)))
+            self._reconnect()
         if not buf:
             self._reconnect()
         return buf
@@ -103,9 +108,7 @@ class IRCConnection:
     def send(self, *m):
         if ' ' in m[-1] or ':' in m[-1]:
             m = m[:-1] + (':' + m[-1],)
-        b = ' '.join(m).encode()[:510] + b'\r\n'
-        while b:
-            b = b[self._send(b):]
+        self._sendall(' '.join(m).encode()[:510] + b'\r\n')
 
     def _testconn(self):
         if not select([self._s], [], [], 60)[0]:
