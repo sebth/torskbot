@@ -161,21 +161,21 @@ class FinalURLHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 class EncodingHTMLParser(HTMLParser):
 
-        def __init__(self):
-            self.result = None
-            super().__init__(False)
+    def __init__(self):
+        self.result = None
+        super().__init__(False)
 
-        def handle_starttag(self, tag, attrs):
-            if tag == 'meta':
-                attrs = dict(attrs)
-                if 'charset' in attrs:
-                    self.result = attrs['charset']
-                elif (attrs.get('http-equiv', '').lower() == 'content-type' and
-                        'content' in attrs):
-                    match = re.match('text/html;\s*charset=(.+)',
-                                     attrs['content'])
-                    if match:
-                        self.result = match.group(1)
+    def handle_starttag(self, tag, attrs):
+        if tag == 'meta':
+            attrs = dict(attrs)
+            if 'charset' in attrs:
+                self.result = attrs['charset']
+            elif (attrs.get('http-equiv', '').lower() == 'content-type' and
+                    'content' in attrs):
+                match = re.match('text/html;\s*charset=(.+)',
+                                 attrs['content'])
+                if match:
+                    self.result = match.group(1)
 
 
 class TitleHTMLParser(HTMLParser):
@@ -214,19 +214,19 @@ class TitleHTMLParser(HTMLParser):
 
 class RedirectHTMLParser(HTMLParser):
 
-        def __init__(self):
-            self.result = None
-            super().__init__(False)
+    def __init__(self):
+        self.result = None
+        super().__init__(False)
 
-        def handle_starttag(self, tag, attrs):
-            attrs = dict(attrs)
-            if (tag == 'meta' and
-                    attrs.get('http-equiv', '').lower() == 'refresh' and
-                    'content' in attrs):
-                match = re.match('\d+;\s*url=(.+)', attrs['content'],
-                                 re.IGNORECASE)
-                if match:
-                    self.result = match.group(1)
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if (tag == 'meta' and
+                attrs.get('http-equiv', '').lower() == 'refresh' and
+                'content' in attrs):
+            match = re.match('\d+;\s*url=(.+)', attrs['content'],
+                             re.IGNORECASE)
+            if match:
+                self.result = match.group(1)
 
 
 class ChunkedParserFeeder:
