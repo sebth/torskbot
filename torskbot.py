@@ -237,6 +237,33 @@ class TitleHTMLParser(HTMLParser):
         return self.oembed_title or self.og_title or self.title
 
 
+class DescHTMLParser(HTMLParser):
+
+    def __init__(self):
+        self.desc = None
+        self.og_desc = None
+        self.done = False
+        super().__init__()
+
+    def handle_starttag(self, tag, attrs):
+        if not self.done and tag == 'meta':
+            attrs = dict(attrs)
+            if (self.desc is None and
+                    attrs.get('name', '').lower() == 'description'):
+                self.desc = re.sub('[\r\n]', ' ', attrs.get('content', ''))
+            elif attrs.get('property', '').lower() == 'og:description':
+                self.og_desc = re.sub('[\r\n]', ' ', attrs.get('content', ''))
+                self.done = True
+
+    def handle_endtag(self, tag):
+        if tag in ('head', 'html'):
+            self.done = True
+
+    @property
+    def result(self):
+        return self.og_desc or self.desc
+
+
 class RedirectHTMLParser(HTMLParser):
 
     def __init__(self):
@@ -315,6 +342,14 @@ def bom2charset(bom):
         return 'utf-16-le'
 
 
+def normalize(s, skip=0):
+    return ' '.join(' '.join(re.split('\W+', s.lower())[skip:]).split())
+
+
+def fuzzymatch(url, needle):
+    return normalize(needle) in normalize(url, 1)
+
+
 def gettitlemsgs(url, from_=None, redirects=0):
     rh = FinalURLHTTPRedirectHandler()
     opener = urllib.request.build_opener(rh)
@@ -365,8 +400,14 @@ def gettitlemsgs(url, from_=None, redirects=0):
 
     if from_ and urlchange(urlquote(from_), urlquote(url)):
         yield 'Vidarebefordring till: ' + url
-    if title:
-        yield 'Titel: ' + title
+
+    if t == 'text/html' or xml:
+        if title and not fuzzymatch(url, title):
+            yield 'Titel: ' + title
+        else:
+            desc = feeder.feeduntil(DescHTMLParser(), cs)
+            if desc and not fuzzymatch(url, desc):
+                yield 'Beskrivning: ' + desc
 
 
 def sendtitle(c, m):
