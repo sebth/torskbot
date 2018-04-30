@@ -163,19 +163,26 @@ class EncodingHTMLParser(HTMLParser):
 
     def __init__(self):
         self.result = None
+        self.done = False
         super().__init__()
 
     def handle_starttag(self, tag, attrs):
-        if tag == 'meta':
+        if not self.done and tag == 'meta':
             attrs = dict(attrs)
             if 'charset' in attrs:
                 self.result = attrs['charset']
+                self.done = True
             elif (attrs.get('http-equiv', '').lower() == 'content-type' and
                     'content' in attrs):
                 match = re.match('text/html;\s*charset=(.+)',
                                  attrs['content'])
                 if match:
                     self.result = match.group(1)
+                    self.done = True
+
+    def handle_endtag(self, tag):
+        if tag in ('head', 'html'):
+            self.done = True
 
 
 class TitleHTMLParser(HTMLParser):
@@ -184,19 +191,21 @@ class TitleHTMLParser(HTMLParser):
         self._intitle = False
         self._title = ''
         self.result = None
+        self.done = False
         super().__init__()
 
     def handle_starttag(self, tag, attrs):
-        if tag == 'title' and not self.result:
-            self._intitle = True
+        if not self.done and tag == 'title' and self.result is None:
+                self._intitle = True
 
     def handle_endtag(self, tag):
         if tag == 'title':
-            if self._title:
-                space = '\x20\x09\x0a\x0c\x0d'
-                self.result = re.sub('[{}]+'.format(space), ' ',
-                                     self._title).strip(space)
+            space = '\x20\x09\x0a\x0c\x0d'
+            self.result = re.sub('[{}]+'.format(space), ' ',
+                                 self._title).strip(space)
             self._intitle = False
+        elif tag in ('head', 'html'):
+            self.done = True
 
     def handle_data(self, data):
         if self._intitle:
@@ -216,17 +225,23 @@ class RedirectHTMLParser(HTMLParser):
 
     def __init__(self):
         self.result = None
+        self.done = False
         super().__init__()
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
-        if (tag == 'meta' and
+        if (not self.done and tag == 'meta' and
                 attrs.get('http-equiv', '').lower() == 'refresh' and
                 'content' in attrs):
             match = re.match('\d+;\s*url=(.+)', attrs['content'],
                              re.IGNORECASE)
             if match:
                 self.result = match.group(1)
+                self.done = True
+
+    def handle_endtag(self, tag):
+        if tag in ('head', 'html'):
+            self.done = True
 
 
 class ChunkedParserFeeder:
@@ -236,13 +251,14 @@ class ChunkedParserFeeder:
         self._content = b''
 
     def feeduntil(self, parser, encoding, maxbytes=1024**2):
-        parser.feed(self._content.decode(encoding, 'replace'))
+        d = codecs.getincrementaldecoder(encoding)(errors='replace')
+        parser.feed(d.decode(self._content))
 
-        while not parser.result and len(self._content) < maxbytes:
+        while not parser.done and len(self._content) < maxbytes:
             chunk = self._f.read(1024)
             if not chunk:
                 break
-            parser.feed(chunk.decode(encoding, 'replace'))
+            parser.feed(d.decode(chunk))
             self._content += chunk
 
         return parser.result
@@ -297,7 +313,6 @@ def gettitlemsgs(url, from_=None, redirects=0):
             from_ = url
         url = rh.final_url
 
-    title = None
     info = f.info()
     t = info.get_content_type()
     xml = t in ('application/xhtml+xml', 'application/xml', 'text/xml')
@@ -325,7 +340,7 @@ def gettitlemsgs(url, from_=None, redirects=0):
                         cs = 'latin-1'
 
         title = feeder.feeduntil(TitleHTMLParser(), cs)
-        if not title and redirects < rh.max_redirections:
+        if title is None and redirects < rh.max_redirections:
             newurl = feeder.feeduntil(RedirectHTMLParser(), cs)
             if newurl:
                 yield from gettitlemsgs(newurl, from_ if from_ else url,
