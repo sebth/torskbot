@@ -163,7 +163,7 @@ class EncodingHTMLParser(HTMLParser):
 
     def __init__(self):
         self.result = None
-        super().__init__(False)
+        super().__init__()
 
     def handle_starttag(self, tag, attrs):
         if tag == 'meta':
@@ -184,7 +184,7 @@ class TitleHTMLParser(HTMLParser):
         self._intitle = False
         self._title = ''
         self.result = None
-        super().__init__(False)
+        super().__init__()
 
     def handle_starttag(self, tag, attrs):
         if tag == 'title' and not self.result:
@@ -216,7 +216,7 @@ class RedirectHTMLParser(HTMLParser):
 
     def __init__(self):
         self.result = None
-        super().__init__(False)
+        super().__init__()
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)

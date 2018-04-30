@@ -14,4 +14,4 @@ Exempel på paketering:
 
 	make PREFIX=/usr DESTDIR=/tmp/stage install
 
-torskbot kräver åtminstone Python 3 och har endast testats med Python 3.2.
+torskbot kräver åtminstone Python 3 och har endast testats med Python 3.5.
