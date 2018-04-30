@@ -325,7 +325,7 @@ def gettitlemsgs(url, from_=None, redirects=0):
                         cs = 'latin-1'
 
         title = feeder.feeduntil(TitleHTMLParser(), cs)
-        if not title and redirects < 20:
+        if not title and redirects < rh.max_redirections:
             newurl = feeder.feeduntil(RedirectHTMLParser(), cs)
             if newurl:
                 yield from gettitlemsgs(newurl, from_ if from_ else url,
