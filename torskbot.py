@@ -190,19 +190,31 @@ class TitleHTMLParser(HTMLParser):
     def __init__(self):
         self._intitle = False
         self._title = ''
-        self.result = None
+        self.title = None
+        self.og_title = None
+        self.oembed_title = None
         self.done = False
         super().__init__()
 
     def handle_starttag(self, tag, attrs):
-        if not self.done and tag == 'title' and self.result is None:
+        if not self.done:
+            attrs = dict(attrs)
+            if self.title is None and tag == 'title':
                 self._intitle = True
+            elif (tag == 'meta' and
+                    attrs.get('property', '').lower() == 'og:title'):
+                self.og_title = re.sub('[\r\n]', ' ', attrs.get('content', ''))
+            elif (tag == 'link' and attrs.get('type', '').lower() in
+                    ('application/json+oembed', 'text/xml+oembed')):
+                self.oembed_title = re.sub('[\r\n]', ' ',
+                                           attrs.get('title', ''))
+                self.done = True
 
     def handle_endtag(self, tag):
         if tag == 'title':
             space = '\x20\x09\x0a\x0c\x0d'
-            self.result = re.sub('[{}]+'.format(space), ' ',
-                                 self._title).strip(space)
+            self.title = re.sub('[{}]+'.format(space), ' ',
+                                self._title).strip(space)
             self._intitle = False
         elif tag in ('head', 'html'):
             self.done = True
@@ -219,6 +231,10 @@ class TitleHTMLParser(HTMLParser):
         if self._intitle:
             self._title += chr(int(name[1:], 16) if name.startswith('x')
                                else int(name))
+
+    @property
+    def result(self):
+        return self.oembed_title or self.og_title or self.title
 
 
 class RedirectHTMLParser(HTMLParser):
