@@ -328,10 +328,8 @@ def gettitlemsgs(url, from_=None, redirects=0):
         if not title and redirects < 20:
             newurl = feeder.feeduntil(RedirectHTMLParser(), cs)
             if newurl:
-                # TODO: Use `yield from' when upgrading from Python 3.2.
-                for titlemsg in gettitlemsgs(newurl, from_ if from_ else url,
-                                             redirects + 1):
-                    yield titlemsg
+                yield from gettitlemsgs(newurl, from_ if from_ else url,
+                                        redirects + 1)
                 return
 
     if from_ and urlchange(urlquote(from_), urlquote(url)):
