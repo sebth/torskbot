@@ -358,7 +358,7 @@ def gettitlemsgs(url, from_=None, redirects=0):
     try:
         f = opener.open(urlquote(url), timeout=5)
     except urllib.error.HTTPError as e:
-        f = e.fp
+        f = e
     if rh.final_url:
         if not from_:
             from_ = url
