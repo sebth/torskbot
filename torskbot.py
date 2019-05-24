@@ -437,6 +437,8 @@ def main():
         printusage()
         return 2
 
+    ignore_re = re.compile(r'(^|\s)!ignorera\b')
+
     with IRCConnection((args[0], dict(opts).get('-p', 6667)),
                        dict(opts).get('-n', 'torskbot'),
                        'https://github.com/sebth/torskbot') as c:
@@ -447,7 +449,7 @@ def main():
                         c.send('JOIN', args[1])
                     elif m[0] == 'PRIVMSG' and m[1].lower() == args[1].lower():
                         try:
-                            if not m[2].startswith('!ignorera '):
+                            if not ignore_re.search(m[2]):
                                 sendtitle(c, m)
                         except IRCReconnectError:
                             raise
