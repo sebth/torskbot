@@ -448,7 +448,7 @@ def main():
         printusage()
         return 2
 
-    ignore_re = re.compile(r'(^|\s)!ignorera\b')
+    ignore_re = re.compile(r'(^|\s)!ig(norera)?\b')
 
     with IRCConnection((args[0], dict(opts).get('-p', 6667)),
                        dict(opts).get('-n', 'torskbot'),
