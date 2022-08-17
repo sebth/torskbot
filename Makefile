@@ -3,12 +3,16 @@ INSTALL=install
 
 torskbot:
 
+TAGS tags: torskbot.py
+	etags -l python $<
+	ctags -l python $<
+
 install: torskbot
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	$(INSTALL) torskbot $(DESTDIR)$(PREFIX)/bin
 
 clean:
-	rm -f torskbot
+	rm -f torskbot TAGS tags
 
 .SUFFIXES: .py
 .py:
