@@ -353,7 +353,7 @@ def fuzzymatch(url, needle):
 def gettitlemsgs(url, from_=None, redirects=0):
     rh = FinalURLHTTPRedirectHandler()
     opener = urllib.request.build_opener(rh)
-    opener.addheaders = [('User-Agent', 'torskbot'),
+    opener.addheaders = [('User-Agent', 'torskbot bot'),
                          ('Accept-Encoding', 'gzip')]
     try:
         f = opener.open(urlquote(url), timeout=5)
