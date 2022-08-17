@@ -193,7 +193,6 @@ class TitleHTMLParser(HTMLParser):
         self._title = ''
         self.title = None
         self.og_title = None
-        self.oembed_title = None
         self.done = False
         self.should_be_done = False
         super().__init__()
@@ -206,11 +205,6 @@ class TitleHTMLParser(HTMLParser):
             elif (tag == 'meta' and
                     attrs.get('property', '').lower() == 'og:title'):
                 self.og_title = re.sub('[\r\n]', ' ', attrs.get('content', ''))
-            elif (tag == 'link' and attrs.get('type', '').lower() in
-                    ('application/json+oembed', 'text/xml+oembed')):
-                self.oembed_title = re.sub('[\r\n]', ' ',
-                                           attrs.get('title', ''))
-                self.done = True
 
     def handle_endtag(self, tag):
         if tag == 'title':
@@ -246,7 +240,7 @@ class TitleHTMLParser(HTMLParser):
 
     @property
     def result(self):
-        return self.oembed_title or self.og_title or self.title
+        return self.og_title or self.title
 
 
 class DescHTMLParser(HTMLParser):
