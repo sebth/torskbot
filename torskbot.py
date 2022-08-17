@@ -315,18 +315,18 @@ class ChunkedParserFeeder:
         return self._content[:n]
 
 
-def quote_nonascii_path(path):
+def quote_nonascii(s):
     return re.sub(
         b'[\x80-\xff]',
         lambda match: '%{:x}'.format(ord(match.group())).encode('ascii'),
-        path.encode()).decode('ascii')
+        s.encode()).decode('ascii')
 
 
 def urlquote(url):
     parts = urllib.parse.urlsplit(url)
     return urllib.parse.urlunsplit(
-        (parts[0], parts[1].encode('idna').decode('ascii'),
-         quote_nonascii_path(parts[2])) + parts[3:])
+        (parts[0], parts[1].encode('idna').decode('ascii'))
+        + tuple(map(quote_nonascii, parts[2:])))
 
 
 def bom2charset(bom):
