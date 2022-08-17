@@ -164,6 +164,7 @@ class EncodingHTMLParser(HTMLParser):
     def __init__(self):
         self.result = None
         self.done = False
+        self.should_be_done = False
         super().__init__()
 
     def handle_starttag(self, tag, attrs):
@@ -194,6 +195,7 @@ class TitleHTMLParser(HTMLParser):
         self.og_title = None
         self.oembed_title = None
         self.done = False
+        self.should_be_done = False
         super().__init__()
 
     def handle_starttag(self, tag, attrs):
@@ -216,7 +218,17 @@ class TitleHTMLParser(HTMLParser):
             self.title = re.sub('[{}]+'.format(space), ' ',
                                 self._title).strip(space)
             self._intitle = False
-        elif tag in ('head', 'html'):
+        elif tag == 'head':
+            if self.result:
+                self.done = True
+            else:
+                # Some non-conforming pages have the title at the
+                # beginning of the body instead of in the head.  Signal
+                # to the caller that we _should_ be done if the page is
+                # conforming, but that it can continue feeding if it
+                # wants to be stubborn.
+                self.should_be_done = True
+        elif tag == 'html':
             self.done = True
 
     def handle_data(self, data):
@@ -243,6 +255,7 @@ class DescHTMLParser(HTMLParser):
         self.desc = None
         self.og_desc = None
         self.done = False
+        self.should_be_done = False
         super().__init__()
 
     def handle_starttag(self, tag, attrs):
@@ -269,6 +282,7 @@ class RedirectHTMLParser(HTMLParser):
     def __init__(self):
         self.result = None
         self.done = False
+        self.should_be_done = False
         super().__init__()
 
     def handle_starttag(self, tag, attrs):
@@ -297,7 +311,10 @@ class ChunkedParserFeeder:
         d = codecs.getincrementaldecoder(encoding)(errors='replace')
         parser.feed(d.decode(self._content))
 
-        while not parser.done and len(self._content) < maxbytes:
+        non_conforming_tries = 0
+        while not parser.done and non_conforming_tries < 2 and len(self._content) < maxbytes:
+            if parser.should_be_done:
+                non_conforming_tries += 1
             chunk = self._f.read(1024)
             if not chunk:
                 break
