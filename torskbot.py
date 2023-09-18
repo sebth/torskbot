@@ -422,7 +422,12 @@ def gettitlemsgs(url, from_=None, redirects=0):
 
 
 def sendtitle(c, m):
-    for match in re.finditer('https?://[^\s[\]{}<>«»`"‘’“”]+', m[2]):
+    if m[2].startswith('\x01ACTION ') and m[2].endswith('\x01'):
+        # This is a "/me" message
+        msg = m[2].strip('\x01').split(' ', 1)[1]
+    else:
+        msg = m[2]
+    for match in re.finditer('https?://[^\s[\]{}<>«»`"‘’“”]+', msg):
         for titlemsg in gettitlemsgs(match.group()):
             c.send('PRIVMSG', m[1], titlemsg)
 
