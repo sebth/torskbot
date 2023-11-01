@@ -309,7 +309,8 @@ class ChunkedParserFeeder:
         parser.feed(d.decode(self._content))
 
         non_conforming_tries = 0
-        while not parser.done and non_conforming_tries < 2 and len(self._content) < maxbytes:
+        while (not parser.done and non_conforming_tries < 2 and
+                len(self._content) < maxbytes):
             if parser.should_be_done:
                 non_conforming_tries += 1
             chunk = self._f.read(1024)
