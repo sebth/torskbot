@@ -145,7 +145,10 @@ def idneq(domain1, domain2):
 def urlchange(oldurl, newurl):
     olddl = urldls(oldurl)
     newdl = urldls(newurl)
-    return not idneq(olddl[-2], newdl[-2]) and olddl[-2]+olddl[-1] != newdl[-2]
+    domainhack = olddl[-2] + olddl[-1]
+    return (not idneq(olddl[-2], newdl[-2]) and
+            domainhack != newdl[-2] and
+            domainhack != newdl[-2][:-1])
 
 
 class FinalURLHTTPRedirectHandler(urllib.request.HTTPRedirectHandler):
