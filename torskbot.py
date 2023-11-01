@@ -410,7 +410,7 @@ def gettitlemsgs(url, from_=None, redirects=0):
                 return
 
     if from_ and urlchange(urlquote(from_), urlquote(url)):
-        yield 'Vidarebefordring till: ' + url
+        yield 'Omdirigering: ' + url
 
     if t == 'text/html' or xml:
         if title and not fuzzymatch(url, title):
