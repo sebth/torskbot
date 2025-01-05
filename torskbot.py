@@ -357,12 +357,57 @@ def bom2charset(bom):
         return 'utf-16-le'
 
 
-def normalize(s, skip=0):
-    return ' '.join(' '.join(re.split('\W+', s.lower())[skip:]).split())
+def splitspecial_tolower(s):
+    return list(filter(None, re.split('\W+', s.lower())))
 
 
-def fuzzymatch(url, needle):
-    return normalize(needle) in normalize(url, 1)
+def shuffle1(l):
+    """Yield all combinations of l with one item shuffled out of order."""
+    yield l
+    # Word on pos i
+    for i in range(len(l)):
+        # Shuffle to pos j
+        for j in range(i):
+            yield l[:j] + [l[i],] + l[j:i] + l[i+1:]
+        for j in range(i+2, len(l)+1):
+            yield l[:i] + l[i+1:j] + [l[i],] + l[j:]
+
+
+def apparentbyurl(url, text):
+    """Return True if the words of text, with up to three words removed;
+    and up to one word shuffled out of order, is a substring of the url,
+    ignoring case and the protocol part of the url.  At least one word
+    of the text must appear in the url, otherwise False is returned.
+    """
+    MAX_MISMATCHES = 3
+    urlwords = splitspecial_tolower(url)[1:]
+    textwords = splitspecial_tolower(text)
+
+    offsetrange = range(len(urlwords) - len(textwords) + MAX_MISMATCHES)
+    # Return early if there are too many words in the text.
+    if not offsetrange:
+        return False
+
+    for stw in shuffle1(textwords):
+        for offset in offsetrange:
+            mismatches = 0
+            i = j = 0
+            while j < len(stw):
+                # Running to the end of urlwords counts as a mismatch
+                # for each remaining word of stw.
+                if (offset + i >= len(urlwords) or
+                        urlwords[offset+i] != stw[j]):
+                    mismatches += 1
+                    if mismatches > MAX_MISMATCHES:
+                        break
+                else:
+                    i += 1
+                j += 1
+            else:
+                if i > 0:  # At least one word matched.
+                    return True
+
+    return False
 
 
 def gettitlemsgs(url, from_=None, redirects=0):
@@ -417,11 +462,11 @@ def gettitlemsgs(url, from_=None, redirects=0):
         yield 'Omdirigering: ' + url
 
     if t == 'text/html' or xml:
-        if title and not fuzzymatch(url, title):
+        if title and not apparentbyurl(url, title):
             yield 'Titel: ' + title
         else:
             desc = feeder.feeduntil(DescHTMLParser(), cs)
-            if desc and not fuzzymatch(url, desc):
+            if desc and not apparentbyurl(url, desc):
                 yield 'Beskr.: ' + desc
 
 
