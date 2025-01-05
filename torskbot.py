@@ -422,7 +422,7 @@ def gettitlemsgs(url, from_=None, redirects=0):
         else:
             desc = feeder.feeduntil(DescHTMLParser(), cs)
             if desc and not fuzzymatch(url, desc):
-                yield 'Beskrivning: ' + desc
+                yield 'Beskr.: ' + desc
 
 
 def sendtitle(c, m):
